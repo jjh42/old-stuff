@@ -1,0 +1,81 @@
+--- ./portage.py	Sun Oct 27 00:00:35 2002
++++ /home/jhunt/emergesize/portage.py	Sat Oct 26 23:41:57 2002
+@@ -7,6 +7,7 @@
+ from stat import *
+ from commands import *
+ from select import *
++from output import *
+ import string,os,types,sys,shlex,shutil,xpak,fcntl,signal,time,missingos,cPickle,atexit,grp
+ 
+ #Secpass will be set to 1 if the user is root or in the wheel group.
+@@ -810,6 +811,49 @@
+ 		#interrupted by signal
+ 		return 16
+ 
++def fetchsize(myuris,humanread):
++	"get the amount remaing to fetch files. Will not work in digest file doesn't exist."
++	digestfn=settings["FILESDIR"]+"/digest-"+settings["PF"]
++	if not os.path.exists(digestfn):
++		print "Digest file", digestfn, " doesn't exist. Aborting"
++		return -1;
++	myfile=open(digestfn,"r")
++	mylines=myfile.readlines()
++	mydigests={}
++	# Parse digest file
++	for x in mylines:
++		myline=string.split(x)
++		if len(myline)<4:
++			#invalid line
++			print "!!! The digest",digestfn,"appears to be corrupt.  Aborting."
++			return -1
++		try:
++			mydigests[myline[2]]={"md5":myline[1],"size":string.atol(myline[3])}
++		except ValueError:
++			print "!!! The digest",digestfn,"appears to be corrupt.  Aborting."
++			return -1
++
++	totalsize=0
++	for myuri in myuris:
++		myfile=os.path.basename(myuri)
++		# Check how much we need to download of myfile
++		if not mydigests.has_key(myfile):
++			print "Digest file missing entry for ", myfile, "Try updating it."
++			return -1
++		filesize=mydigests[myfile]["size"];
++		try:
++			mystat=os.stat(settings["DISTDIR"]+"/"+myfile)
++			size=filesize - mystat[ST_SIZE]-filesize
++			if(size > 0):
++				totalsize+=size
++		except (OSError,IOError),e:
++			totalsize += filesize
++	if(humanread):
++		print "Requires "+humansize(totalsize)+" fetching."
++	else:
++		return totalsize
++
++
+ def fetch(myuris):
+ 	"fetch files.  Will use digest file if available."
+ 	if ("mirror" in features) and ("nomirror" in settings["RESTRICT"].split()):
+@@ -1058,7 +1102,7 @@
+ 		return unmerge(settings["CATEGORY"],settings["PF"],myroot)
+ 	
+ 	if mydo not in ["help","clean","prerm","postrm","preinst","postinst","config","touch","setup",
+-	"depend","fetch","digest","unpack","compile","install","rpm","qmerge","merge","package"]:
++	"depend","fetch","fetchsize","pfetchsize","digest","unpack","compile","install","rpm","qmerge","merge","package"]:
+ 		print "!!! Please specify a valid command."
+ 		return 1
+ 
+@@ -1102,6 +1146,11 @@
+ 		fetchme=newuris
+ 		checkme=alist
+ 
++	if mydo == "fetchsize":
++		return fetchsize(fetchme, 1)
++	if mydo == "pfetchsize":
++		return fetchsize(fetchme, 0)
++
+ 	if not fetch(fetchme):
+ 		return 1
+ 

@@ -1,0 +1,45 @@
+--- ./emerge	Sat Oct 26 23:51:43 2002
++++ /home/jhunt/emergesize/emerge	Sat Oct 26 23:39:41 2002
+@@ -823,10 +823,22 @@
+ 			else:
+ 				myk="ebuild "+myroot+" "+myeb
+ 
+-		return myk	
+-	
++		return myk
++
+ 	def display(self,mylist):
++		totalsize = 0
+ 		for x in mylist:
++			sizestr=""
++			if x[0] == "ebuild":
++				# Calculate size of package that needs fetching.
++				y=portage.portdb.findname(x[2])
++				retval=portage.doebuild(y,"pfetchsize",x[1],edebug)
++				if(retval > 0):
++					# Returns the size
++					totalsize += retval
++					sizestr="Size: "+humansize(retval)
++
++
+ 			if x[0]=="blocks":
+ 				addl=""+red("B")+"    "
+ 				resolved=portage.db[x[1]]["vartree"].resolve_key(x[2])
+@@ -853,13 +865,14 @@
+ 				else:
+ 					addl=" "+green("N")+"   "
+ 				if x[1]!="/":
+-					print "["+x[0]+" "+addl+"]",x[2],"to",x[1]
++					print "["+x[0]+" "+addl+"]",x[2],"to",x[1],sizestr
+ 				else:
+-					print "["+x[0]+" "+addl+"]",x[2]
++					print "["+x[0]+" "+addl+"]",x[2],sizestr
++		print "Total size: "+humansize(totalsize)
+ 
+ 	def outdated(self):
+ 		return self.outdatedpackages
+-				
++
+ 	def merge(self,mylist):
+ 		returnme=0
+ 		#check for blocking dependencies

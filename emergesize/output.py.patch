@@ -1,0 +1,16 @@
+--- ./output.py	Sun Oct 27 00:00:35 2002
++++ /home/jhunt/emergesize/output.py	Sat Oct 26 23:22:02 2002
+@@ -37,3 +37,13 @@
+ 
+ def red(text):
+ 	return codes["red"]+text+codes["reset"]
++
++def humansize(size):
++	"Converts size into a string with a human readable size. Ie converts 1024 to 1KB etc."
++	sizes=["B","KB","MB","GB"]
++	i = 0;
++	fsize=float(size)
++	while(fsize > 1024):
++		i+=1
++		fsize /= 1024
++	return ("%.1f" % fsize) + sizes[i]
