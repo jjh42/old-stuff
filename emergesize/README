@@ -1,0 +1,30 @@
+This is patch to add support for showing the amount of fetching installing
+a package is going to take. See http://bif.sourceforge.net/patches.php
+
+From my submission to gentoo:
+
+Hi, 
+ 
+I download stuff over a 56K modem so it is of interest to me to about how much 
+downloading a package is going to require. 
+This modification consists of three things. 
+output.py.diff: Addes humansize function. 
+portage.py.diff: Adds 2 more ebuild functions. 
+                 "fetchsize". This instead of fetching the files will say 
+                 how much fetching is left. Ie 6.4 MB or 1.3K etc. It gets 
+                this info by parsing the digest files and checking if the 
+                files to be downloaded already exist. If they do it subtracts 
+                the amount already there for the size. Ie if u have downloaded 
+                3 MB of an 8MB file it will tell you only 5MB remaining. 
+                Also adds "pfetchsize". This is a version of fetchsize that is 
+                used by portage. Rather than printing the amount to be 
+                downloaded it exits with a return value of that amount. 
+emerge.diff:    Changes emerge so that when doing "--pretend" it prints 
+                by each package the size (it gets this size by using ebuild 
+                pfetchsize). 
+                And the bottum of the list it prints a total. 
+ 
+This is my first time really using python. Let me know if you want anything 
+fixed up or anything like that.
+
+See http://bugs.gentoo.org/show_bug.cgi?id=9699 for more info.
