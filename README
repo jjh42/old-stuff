@@ -1,0 +1,11 @@
+This is various patches made by Project Bif (http://bif.sourceforge.net).
+See http://bif.sourceforge.net/patches.php for more info.
+
+avrassembly.xml:	This file is a description of how to syntax highlighting
+			AVR assembly language. It's for use with kate editor.
+			(See http://kate.kde.org).
+
+emergesize:		This directory contains some patches for emerge the package
+			manager used by Gentoo Linux (http://www.gentoo.org). These
+			patches add support for querying the size of a package. See
+			the README in the directory for more info.

@@ -1,0 +1,10 @@
+2002-10-30  Jonathan Hunt <jhuntnz@users.sourceforge.net>
+
+	* ChangeLog: Added.
+	* README: Added.
+	* emergesize/README: Added.
+	* avrassembly.xml: First import was a corrupted version. Added
+	  good version.
+
+
+
