@@ -1,0 +1,334 @@
+Index: src/parser.yy
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/parser.yy,v
+retrieving revision 1.2
+diff -u -r1.2 parser.yy
+--- src/parser.yy	31 Oct 2003 15:07:44 -0000	1.2
++++ src/parser.yy	10 Feb 2004 02:09:42 -0000
+@@ -70,7 +70,7 @@
+ %token <c> SET
+ %token D_LOAD D_BACKGROUND D_CALIBRATE D_RANGE D_DEVIATION D_INFO D_EXPORT
+ %token F_RUN F_CONTINUE F_METHOD F_INFO 
+-%token S_ADD S_FREEZE S_HISTORY S_INFO S_REMOVE S_CHANGE S_VALUE S_EXPORT 
++%token S_ADD S_FREEZE S_HISTORY S_INFO S_GUESS S_REMOVE S_CHANGE S_VALUE S_EXPORT 
+ %token C_WAVELENGTH C_ADD C_INFO C_REMOVE C_FIND 
+ %token O_PLOT O_LOG O_INCLUDE O_WAIT O_DUMP
+ %token M_FINDPEAK
+@@ -181,6 +181,8 @@
+     | S_INFO '<' SEP               { imsg (V_fzg::print_type_info (zType, 0)); }
+     | S_INFO fzg_type SEP       { imsg (V_fzg::print_type_info ($2.fzg, $2.c));}
+     | S_INFO SEP                   { imsg (my_sum->general_info()); }
++    | S_GUESS fzg_num SEP            { my_sum->guess_fzg($2.fzg, $2.i); }
+     | S_REMOVE a_num SEP           { my_sum->rm_a ($2); }
+     | S_REMOVE fzg_num SEP         { my_sum->rm_fzg ($2.fzg, $2.i); }
+     | S_REMOVE '*' '*' SEP         { my_sum->rm_all(); }
+Index: src/scanner.ll
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/scanner.ll,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 scanner.ll
+--- src/scanner.ll	17 Jun 2003 20:07:54 -0000	1.1.1.1
++++ src/scanner.ll	10 Feb 2004 02:09:42 -0000
+@@ -77,6 +77,7 @@
+ s\.a(dd)?	   r_cmd(); return S_ADD; 
+ s\.h(istory)?      r_cmd(); BEGIN(D_UI_SLASH); return S_HISTORY;
+ s\.i(nfo)?	   r_cmd(); return S_INFO;
++s\.g(uess)?     r_cmd(); return S_GUESS;
+ s\.r(emove)?	   r_cmd(); return S_REMOVE;
+ s\.c(hange)?	   r_cmd(); return S_CHANGE; 
+ s\.f(reeze)?	   r_cmd(); return S_FREEZE;
+Index: src/sum.cpp
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/sum.cpp,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 sum.cpp
+--- src/sum.cpp	17 Jun 2003 20:07:54 -0000	1.1.1.1
++++ src/sum.cpp	10 Feb 2004 02:09:42 -0000
+@@ -11,6 +11,7 @@
+ #include "ffunc.h"
+ #include "gfunc.h"
+ #include "data.h"
++#include "manipul.h"
+ 
+ using namespace std;
+ 
+@@ -529,6 +530,72 @@
+     v->c_name = V_fzg::short_type(fzg) + S(n);
+     v->c_description = desc;
+     return n;
++}
++
++/** Helper function for guess_fzg - addes a new peak to the Sum of type t, with c, h fwhm set.
++ */
++void Sum::addpeak(One_of_fzg fzg, char type, fp c, fp h, fp fwhm)
++{
++    vector<Pag> pags;
++    pags = vector1(add_a(h, Domain()));
++//    pags.push_back(pagfwhm);
++    pags.push_back(add_a(c, Domain()));
++    pags.push_back(add_a(fwhm/2, Domain()));
++
++
++    add_fzg(fzg, type, pags);
++
++}
++
++/** The idea of this function is that it guess's what the fit should be for the peak - much like what happens
++ * when you add a peak using the range function. The only difference is that this is done on already existing peaks
++ * - for instance when a nearby peak is moved etc and the user wants this why estimated again.
++ *
++ * Basically this functions works by removing the existing peak and replacing it with a newly guessed peak.
++ *
++ * Note: In guessing the peak it destroy any domain parameters or frozen paramateres that were existing for this peak.
++ */
++int Sum::guess_fzg(One_of_fzg fzg, int  n)
++{
++
++    if (n < 0 || n >= fzg_size(fzg)) {
++        warn(V_fzg::full_type(fzg) + S(n) + " not found.");
++        return -1;
++    }
++
++    verbose("Guessing " + S(n));
++    assert(my_manipul);
++
++    fp approx_c;
++    fp plusmin;
++    // Get the initial guessing parameters from the existing peak - also save enough info to restore the peak again if needed
++    fp oldh;
++    fp oldfwhm;
++    char type;
++    V_f *p = fvec[n];
++
++    oldh = p->height();
++    oldfwhm = p->fwhm();
++    type = p->type;        
++    approx_c = p->center();
++    plusmin = p->area() / p->height();    
++
++    // Remove this peak from the sum - if it is left in then the guessing will not work correctly
++    rm_fzg(fzg, n, true);
++            
++    fp c, h, area, fwhm;
++    bool r = my_manipul->estimate_peak_parameters(approx_c,plusmin,&c,&h,&area,&fwhm);
++    if (!r) {
++        warn("Unable to find new peak - restoring old peak");
++        addpeak(fzg, type, approx_c, oldh, oldfwhm);        
++        return -1;
++    }
++        
++    // Have an estimate of the peak h,c and fwhm
++    // Set the new peak parameters
++    addpeak(fzg, type, c, h, fwhm);
++      
++    return  0;
+ }
+ 
+ Pag Sum::add_g (char type, const vector<Pag> &p, const string &desc)
+Index: src/sum.h
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/sum.h,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 sum.h
+--- src/sum.h	17 Jun 2003 20:07:54 -0000	1.1.1.1
++++ src/sum.h	10 Feb 2004 02:09:42 -0000
+@@ -84,6 +84,8 @@
+     int fzg_size (One_of_fzg fzg) const;
+     int add_fzg (One_of_fzg fzg, char type, const std::vector<Pag> &p,
+                  const std::string &desc = "");
++    int guess_fzg(One_of_fzg fzg, int n);
++    void addpeak(One_of_fzg fzg, char type, fp c, fp h, fp fwhm);
+     std::string Sum::info_fzg (One_of_fzg fzg, int n) const;
+     std::string info_fzg_parameters(One_of_fzg fzg, int n, bool only_val) const;
+     int rm_fzg (One_of_fzg fzg, int n, bool silent = false);
+Index: src/wx_gui.cpp
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/wx_gui.cpp,v
+retrieving revision 1.6
+diff -u -r1.6 wx_gui.cpp
+--- src/wx_gui.cpp	18 Jan 2004 12:34:00 -0000	1.6
++++ src/wx_gui.cpp	10 Feb 2004 02:09:42 -0000
+@@ -81,6 +81,8 @@
+ #include "img/dpane.xpm"
+ #include "img/mouse_l.xpm"
+ #include "img/mouse_r.xpm"
++#include "img/rightscroll.xpm"
++#include "img/leftscroll.xpm"
+ 
+ #ifndef VERSION
+ #   define VERSION "unknown"
+@@ -192,6 +194,8 @@
+     ID_G_V_ALL                 ,
+     ID_G_V_VERT                ,
+     ID_G_V_ZOOM_PREV   = 44302 ,
++    ID_G_V_SCROLL_LEFT,
++    ID_G_V_SCROLL_RIGHT,
+     ID_G_LCONF1        = 44342 ,
+     ID_G_LCONF2                ,
+     ID_G_LCONFB                ,
+@@ -225,7 +229,7 @@
+     ID_ft_f_undo               ,
+     ID_ft_s_aa                 ,
+     ID_ft_dpane                ,
+-    ID_ft_peakchoice
++    ID_ft_peakchoice        ,    
+ };
+ 
+ IMPLEMENT_APP(FApp)
+@@ -368,6 +372,8 @@
+     EVT_MENU (ID_G_S_STATBAR,   FFrame::OnSwitchStatbar)
+     EVT_MENU (ID_G_V_ALL,       FFrame::OnGViewAll)
+     EVT_MENU (ID_G_V_VERT,      FFrame::OnGFitHeight)
++    EVT_MENU (ID_G_V_SCROLL_LEFT, FFrame::OnGScrollLeft)
++    EVT_MENU (ID_G_V_SCROLL_RIGHT, FFrame::OnGScrollRight)
+     EVT_MENU_RANGE (ID_G_V_ZOOM_PREV+0, ID_G_V_ZOOM_PREV+20, 
+                                 FFrame::OnPreviousZoom)    
+     EVT_MENU (ID_G_LCONF1,      FFrame::OnConfigRead)
+@@ -693,6 +699,8 @@
+     gui_menu->AppendSeparator();
+     gui_menu->Append (ID_G_V_ALL, "Zoom &All", "View whole data");
+     gui_menu->Append (ID_G_V_VERT, "Fit &vertically", "Adjust vertical zoom");
++    gui_menu->Append (ID_G_V_SCROLL_LEFT, "Scroll View &Left", "Scroll View Left");
++    gui_menu->Append (ID_G_V_SCROLL_RIGHT, "Scroll View &Right", "Scroll View Right");
+     wxMenu* gui_menu_zoom_prev = new wxMenu;
+     gui_menu->Append(ID_G_V_ZOOM_PREV, "&Previous Zooms", gui_menu_zoom_prev);
+     gui_menu->AppendSeparator();
+@@ -1326,6 +1334,18 @@
+     plot->change_zoom (". []");
+ }
+ 
++void FFrame::OnGScrollLeft (wxCommandEvent & WXUNUSED(event))
++{
++    printf("Scroll left\n");
++    plot->move_view_horizontally(true);
++}
++
++void FFrame::OnGScrollRight (wxCommandEvent & WXUNUSED(event))
++{
++    printf("Scroll right\n");
++    plot->move_view_horizontally(false);
++}
++
+ void FFrame::OnPreviousZoom(wxCommandEvent& event)
+ {
+     int n = event.GetId() - ID_G_V_ZOOM_PREV;
+@@ -1824,7 +1844,11 @@
+              "Fit data in window");
+     AddTool (ID_G_V_VERT, "Fit height", wxBitmap(vertic_xpm), wxNullBitmap,
+             wxITEM_NORMAL, "Fit vertically",
+-            "Set optimal y scale"); 
++            "Set optimal y scale");
++    AddTool(ID_G_V_SCROLL_LEFT, "Scroll View Left", wxBitmap(leftscroll), wxNullBitmap,
++            wxITEM_NORMAL, "Scroll View Left");
++    AddTool(ID_G_V_SCROLL_RIGHT, "Scroll View Right", wxBitmap(rightscroll), wxNullBitmap,
++            wxITEM_NORMAL, "Scroll View Right");
+     AddTool (ID_ft_v_pr, "Back", wxBitmap(backv_xpm), wxNullBitmap, 
+              wxITEM_NORMAL, "Previous view", 
+              "Go to previous View");
+@@ -1926,13 +1950,13 @@
+             break; 
+         case ID_ft_f_undo: 
+             exec_command("s.history -1"); 
+-            break; 
++            break;
+         case ID_ft_s_aa: 
+         {
+             fp c, h, f;
+             bool r = my_manipul->estimate_peak_parameters(0.,+INF,&c,&h,0,&f);
+             if (r) frame->plot->add_peak(h, c, f/2);
+-            break; 
++            break;
+         }
+         default: assert(0);
+     }
+Index: src/wx_gui.h
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/wx_gui.h,v
+retrieving revision 1.4
+diff -u -r1.4 wx_gui.h
+--- src/wx_gui.h	18 Jan 2004 12:34:00 -0000	1.4
++++ src/wx_gui.h	10 Feb 2004 02:09:42 -0000
+@@ -202,6 +202,8 @@
+     void OnChangePeakType(wxCommandEvent& event);
+     void OnGViewAll      (wxCommandEvent& event);
+     void OnGFitHeight    (wxCommandEvent& event);
++    void OnGScrollLeft   (wxCommandEvent& event);
++    void OnGScrollRight (wxCommandEvent& event);
+     void OnPreviousZoom  (wxCommandEvent& event);
+     void OnConfigRead    (wxCommandEvent& event);
+     void OnConfigBuiltin (wxCommandEvent& event);
+Index: src/wx_plot.cpp
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/wx_plot.cpp,v
+retrieving revision 1.4
+diff -u -r1.4 wx_plot.cpp
+--- src/wx_plot.cpp	18 Jan 2004 12:34:00 -0000	1.4
++++ src/wx_plot.cpp	10 Feb 2004 02:09:43 -0000
+@@ -64,6 +64,7 @@
+     ID_peak_popup_info              = 45250,
+     ID_peak_popup_del                      ,
+     ID_peak_popup_tree                     ,
++    ID_peak_popup_guess             ,
+ 
+     ID_diff_popup_plot_0            = 45310,
+     ID_diff_popup_c_background      = 45340,
+@@ -220,6 +221,7 @@
+     EVT_MENU (ID_peak_popup_info,   MainPlot::OnPeakInfo)
+     EVT_MENU (ID_peak_popup_del,    MainPlot::OnPeakDelete)
+     EVT_MENU (ID_peak_popup_tree,   MainPlot::OnPeakShowTree)
++    EVT_MENU (ID_peak_popup_guess, MainPlot::OnPeakGuess)
+ END_EVENT_TABLE()
+ 
+ MainPlot::MainPlot (wxWindow *parent, Plot_common &comm) 
+@@ -760,6 +762,7 @@
+     peak_menu.Append(ID_peak_popup_info, "&Info");
+     peak_menu.Append(ID_peak_popup_tree, "&Show tree");
+     peak_menu.Append(ID_peak_popup_del, "&Delete");
++    peak_menu.Append(ID_peak_popup_guess, "&Guess");
+     peak_menu.Enable(ID_peak_popup_del, my_sum->refs_to_f(over_peak) == 0);
+     peak_menu.AppendSeparator();
+     //TODO parameters: height, ...
+@@ -787,6 +790,12 @@
+         dialog->Destroy();
+     }
+            
++}
++
++void MainPlot::OnPeakGuess(wxCommandEvent &WXUNUSED(event))
++{
++    if (over_peak >= 0)
++        exec_command("s.guess ^" + S(over_peak));
+ }
+ 
+ 
+Index: src/wx_plot.h
+===================================================================
+RCS file: /cvsroot/fityk/fityk/src/wx_plot.h,v
+retrieving revision 1.3
+diff -u -r1.3 wx_plot.h
+--- src/wx_plot.h	23 Dec 2003 16:51:33 -0000	1.3
++++ src/wx_plot.h	10 Feb 2004 02:09:43 -0000
+@@ -66,6 +66,7 @@
+     virtual void save_settings(wxConfigBase *cf) = 0;
+     void change_zoom(std::string s);
+     void previous_zoom(int n=1);
++    void move_view_horizontally (bool on_left);
+ 
+ protected:
+     wxBrush backgroundBrush;
+@@ -81,7 +82,6 @@
+     int mouse_press_X, mouse_press_Y;
+     int vlfc_prev_x;
+ 
+-    void move_view_horizontally (bool on_left);
+     void perhaps_it_was_silly_zoom_try() const;
+     void draw_dashed_vert_lines (int x1, int x2 = INVALID);
+     bool vert_line_following_cursor(Mouse_act_enum ma, int x=0, int x0=INVALID);
+@@ -127,6 +127,7 @@
+     void OnPeakInfo (wxCommandEvent& event);
+     void OnPeakDelete (wxCommandEvent& event);
+     void OnPeakShowTree (wxCommandEvent& event);
++    void OnPeakGuess(wxCommandEvent &event);
+     void cancel_mouse_press();
+     void save_settings(wxConfigBase *cf);
+     void read_settings(wxConfigBase *cf);
