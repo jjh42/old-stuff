@@ -9,3 +9,9 @@ emergesize:		This directory contains some patches for emerge the package
 			manager used by Gentoo Linux (http://www.gentoo.org). These
 			patches add support for querying the size of a package. See
 			the README in the directory for more info.
+
+cervisia.patch:		This is a minor patch against cervisia version 1.5rich1 from kdesdk sources
+			(http://developers.kde.org). This patch makes the ChangeLog dialog
+			in cervisia non-modal. I found the modal dialog real annoying because I
+			was often wanting to do diffs with files against the repository so I could
+			check what changes I had done. I hav submitted the patch.

@@ -1,10 +1,13 @@
-2002-10-30  Jonathan Hunt <jhuntnz@users.sourceforge.net>
+2002-10-31  Jonathan Hunt <jhuntnz@users.sourceforge.net>
 
+	* cervisia.patch: Added patch to make ChangeLog dialog
+	  in cervisia non-global.
+	* README: Add cervisia.patch.
+
+2002-10-30  Jonathan Hunt <jhuntnz@users.sourceforge.net>
 	* ChangeLog: Added.
 	* README: Added.
 	* emergesize/README: Added.
 	* avrassembly.xml: First import was a corrupted version. Added
 	  good version.
-
-
 

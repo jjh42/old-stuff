@@ -1,0 +1,98 @@
+diff -U 3 /home/jhunt/tmp/kdesdk-3.0.4/cervisia/cervisiapart.cpp ./cervisiapart.cpp
+--- /home/jhunt/tmp/kdesdk-3.0.4/cervisia/cervisiapart.cpp	Mon Feb 18 06:39:45 2002
++++ ./cervisiapart.cpp	Thu Oct 31 20:27:46 2002
+@@ -602,15 +602,18 @@
+ 
+ void CervisiaPart::slotChangeLog()
+ {
+-    // Modal dialog
++    // Modeless dialog
+     ChangeLogDialog *l = new ChangeLogDialog();
++
++    connect(l, SIGNAL(changelogmsg(const char *)), this, SLOT(slotSetChangeLogStr(const char *)));
++    
+     if (l->readFile(sandbox + "/ChangeLog"))
+-    {
+-        if (l->exec())
+-            changelogstr = l->message();
+-    }
++        l->show();
++}
+ 
+-    delete l;
++void CervisiaPart::slotSetChangeLogStr(const char *entry)
++{
++    changelogstr = entry;
+ }
+ 
+ 
+diff -U 3 /home/jhunt/tmp/kdesdk-3.0.4/cervisia/cervisiapart.h ./cervisiapart.h
+--- /home/jhunt/tmp/kdesdk-3.0.4/cervisia/cervisiapart.h	Sun Jan 27 06:49:52 2002
++++ ./cervisiapart.h	Thu Oct 31 19:23:13 2002
+@@ -129,9 +129,11 @@
+     void slotHelp();
+     void slotCVSInfo();
+ 
++    
+ protected slots:
+     void slotJobFinished(bool /*success*/);
+-
++    void slotSetChangeLogStr(const char *entry);
++    
+ private:    
+     void setupActions();
+ 
+diff -U 3 /home/jhunt/tmp/kdesdk-3.0.4/cervisia/changelogdlg.cpp ./changelogdlg.cpp
+--- /home/jhunt/tmp/kdesdk-3.0.4/cervisia/changelogdlg.cpp	Sun Jan 27 06:49:52 2002
++++ ./changelogdlg.cpp	Thu Oct 31 20:26:59 2002
+@@ -45,7 +45,7 @@
+ 
+ 
+ ChangeLogDialog::ChangeLogDialog(QWidget *parent, const char *name)
+-    : QDialog(parent, name, true,
++    : QDialog(parent, name, false,
+               WStyle_Customize|WStyle_NormalBorder|WStyle_Title|WStyle_MinMax)
+ {
+     setCaption(i18n("Edit ChangeLog"));
+@@ -100,12 +100,16 @@
+             for(int i = 0 ; i < edit->numLines(); ++i)
+                 stream << edit->textLine(i) << '\n';
+             f.close();
++
++            emit changelogmsg(message());
+         }
+     if (!options)
+         options = new Options;
+     options->size = size();
+     
+     QDialog::done(res);
++    // Self destroy this object
++    delete this;
+ }
+ 
+ 
+diff -U 3 /home/jhunt/tmp/kdesdk-3.0.4/cervisia/changelogdlg.h ./changelogdlg.h
+--- /home/jhunt/tmp/kdesdk-3.0.4/cervisia/changelogdlg.h	Sun Sep  2 11:23:10 2001
++++ ./changelogdlg.h	Thu Oct 31 19:23:52 2002
+@@ -26,15 +26,18 @@
+     ChangeLogDialog( QWidget *parent=0, const char *name=0 );
+ 
+     bool readFile(const QString &filename);
+-    QString message();
+-
++    
+     static void loadOptions(KConfig *config);
+     static void saveOptions(KConfig *config);
+-    
++
++signals:
++    void changelogmsg(const char *entry);
+ protected slots:
+     virtual void done(int res);
+ 
+ private:
++    QString message();
++    
+     struct Options {
+         QSize size;
+     };
